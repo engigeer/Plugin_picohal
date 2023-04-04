@@ -21,22 +21,28 @@
 
 */
 
-#pragma once
-
 #ifdef ARDUINO
-#include "../driver.h"
+#include "../../grbl/hal.h"
+#include "../../grbl/protocol.h"
+#include "../../grbl/state_machine.h"
+#include "../../grbl/report.h"
 #else
-#include "driver.h"
+#include "grbl/hal.h"
+#include "grbl/protocol.h"
+#include "grbl/state_machine.h"
+#include "grbl/report.h"
 #endif
 
-#define SPINDLE_ALL        -1
-#define SPINDLE_HUANYANG1   1
-#define SPINDLE_HUANYANG2   2
-#define SPINDLE_GS20        3
-#define SPINDLE_YL620A      4
-#define SPINDLE_MODVFD      5
-#define SPINDLE_H100        6 // Not tested
+//#include <modbus.h>
+#include "spindle/modbus.h"
 
-int8_t spindle_select_get_binding (spindle_id_t spindle_id);
+#define PICOHAL_RETRIES     25
+#define PICOHAL_RETRY_DELAY 100
+
+typedef enum {
+    picohal_Idle = 0,
+    picohal_SetState,
+    picohal_SetEvent
+} picohal_response_t;
 
 /**/
