@@ -42,7 +42,16 @@
 typedef enum {
     picohal_Idle = 0,
     picohal_SetState,
+    picohal_SetCoolant,
     picohal_SetEvent
 } picohal_response_t;
+
+typedef enum {
+    TOOLCHANGE_ACK = 0,
+    PROBE_START = 1,
+    PROBE_COMPLETED = 2,
+    PROBE_FIXTURE = 3,
+    PROGRAM_COMPLETED = 30,
+} picohal_events;
 
 /**/

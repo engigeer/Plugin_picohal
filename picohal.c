@@ -28,13 +28,17 @@
 
 #include "picohal.h"
 
+#define POLLING_DELAY 100
+
 static on_state_change_ptr on_state_change;
 static on_report_options_ptr on_report_options;
 static on_program_completed_ptr on_program_completed;
-static on_execute_realtime_ptr on_execute_realtime; // For real time loop insertion
-static user_mcode_ptrs_t user_mcode;
+static coolant_set_state_ptr on_coolant_changed; // For real time loop insertion
 static driver_reset_ptr driver_reset;
-static user_mcode_ptrs_t user_mcode;
+//static user_mcode_ptrs_t user_mcode;
+static on_probe_completed_ptr on_probe_completed;
+static on_probe_start_ptr on_probe_start;
+static on_probe_fixture_ptr on_probe_fixture;
 
 static uint16_t retry_counter = 0;
 
@@ -116,6 +120,25 @@ static void picohal_write_event (uint16_t current_event)
     modbus_send(&rpm_cmd, &callbacks, true);
 }
 
+static void picohal_write_coolant (coolant_state_t state)
+{   
+    //set coolant state in register 0x100
+    modbus_message_t rpm_cmd = {
+        .context = (void *)picohal_SetCoolant,
+        .crc_check = false,
+        .adu[0] = PICOHAL_ADDRESS,
+        .adu[1] = ModBus_WriteRegister,
+        .adu[2] = 0x01,
+        .adu[3] = 0x00,
+        .adu[4] = 0x00,
+        .adu[5] = state.value & 0xFF,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+
+    modbus_send(&rpm_cmd, &callbacks, true);
+}
+
 static void picohal_rx_packet (modbus_message_t *msg)
 {
     if(!(msg->adu[0] & 0x80)) {
@@ -169,6 +192,14 @@ static void onReportOptions (bool newopt)
     }
 }
 
+static void onCoolantChanged (coolant_state_t state){
+
+    picohal_write_coolant(state);
+
+    if (on_coolant_changed)         // Call previous function in the chain.
+        on_coolant_changed(state);    
+}
+
 static void onStateChanged (sys_state_t state)
 {
     picohal_set_state();
@@ -176,14 +207,52 @@ static void onStateChanged (sys_state_t state)
         on_state_change(state);    
 }
 
+static bool onProbeStart (axes_signals_t axes, float *target, plan_line_data_t *pl_data)
+{
+    //write the program flow value to the event register.
+    picohal_write_event(PROBE_START);
+    
+    if(on_probe_start)
+        on_probe_start(axes, target, pl_data);
+
+    return false;
+}
+
+static void onProbeCompleted ()
+{
+    //write the program flow value to the event register.
+    picohal_write_event(PROBE_COMPLETED);
+    
+    if(on_probe_completed)
+        on_probe_completed();
+}
+
+static bool onProbeFixture (tool_data_t *tool, bool at_g59_3, bool on)
+{
+    //write the program flow value to the event register.
+    picohal_write_event(PROBE_FIXTURE);
+    
+    if(on_probe_fixture)
+        on_probe_fixture(tool, at_g59_3, on);
+
+    return false;
+}
+
 // ON (Gcode) PROGRAM COMPLETION
 static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
 {
     //write the program flow value to the event register.
-    picohal_write_event((uint16_t) program_flow);
+    picohal_write_event(PROGRAM_COMPLETED);
     
     if(on_program_completed)
         on_program_completed(program_flow, check_mode);
+}
+
+// DRIVER RESET
+static void driverReset (void)
+{
+    picohal_set_state();
+    driver_reset();
 }
 
 void picohal_init (void)
@@ -194,12 +263,29 @@ void picohal_init (void)
     on_state_change = grbl.on_state_change;             // Subscribe to the state changed event by saving away the original
     grbl.on_state_change = onStateChanged;              // function pointer and adding ours to the chain.
 
+    on_coolant_changed = hal.coolant.set_state;         //subscribe to coolant events
+    hal.coolant.set_state = onCoolantChanged;
+
+    on_probe_start = grbl.on_probe_start;               //subscribe to probe start
+    grbl.on_probe_start = onProbeStart;
+
+    on_probe_completed = grbl.on_probe_completed;               //subscribe to probe start
+    grbl.on_probe_completed = onProbeCompleted; 
+
+    on_probe_fixture = grbl.on_probe_fixture;               //subscribe to probe start
+    grbl.on_probe_fixture = onProbeFixture;     
+
     on_program_completed = grbl.on_program_completed;   // Subscribe to on program completed events (lightshow on complete?)
     grbl.on_program_completed = onProgramCompleted;     // Checkered Flag for successful end of program lives here
+
+    driver_reset = hal.driver_reset;                    // Subscribe to driver reset event
+    hal.driver_reset = driverReset;
 
     //subscribe to following events:
     //coolant
     //spindle
-    //
+    //typedef bool (*on_probe_start_ptr)(axes_signals_t axes, float *target, plan_line_data_t *pl_data);
+    //typedef void (*on_probe_completed_ptr)(void);
+    //typedef void (*on_toolchange_ack_ptr)(void);
 
 }
