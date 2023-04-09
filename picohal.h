@@ -36,8 +36,9 @@
 //#include <modbus.h>
 #include "spindle/modbus.h"
 
-#define PICOHAL_RETRIES     25
-#define PICOHAL_RETRY_DELAY 100
+#define RETRY_DELAY         250
+#define POLLING_INTERVAL    250
+#define PICOHAL_RETRIES     5
 
 typedef enum {
     picohal_Idle = 0,
@@ -52,6 +53,7 @@ typedef enum {
     PROBE_COMPLETED = 2,
     PROBE_FIXTURE = 3,
     PROGRAM_COMPLETED = 30,
+    INVALID_EVENT = 255,
 } picohal_events;
 
 /**/

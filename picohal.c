@@ -25,10 +25,9 @@
 
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "picohal.h"
-
-#define POLLING_DELAY 100
 
 static on_state_change_ptr on_state_change;
 static on_report_options_ptr on_report_options;
@@ -39,8 +38,11 @@ static driver_reset_ptr driver_reset;
 static on_probe_completed_ptr on_probe_completed;
 static on_probe_start_ptr on_probe_start;
 static on_probe_fixture_ptr on_probe_fixture;
+static on_execute_realtime_ptr on_execute_realtime, on_execute_delay;
 
 static uint16_t retry_counter = 0;
+
+static char buf[128];
 
 static void picohal_rx_packet (modbus_message_t *msg);
 static void picohal_rx_exception (uint8_t code, void *context);
@@ -50,13 +52,110 @@ static const modbus_callbacks_t callbacks = {
     .on_rx_exception = picohal_rx_exception
 };
 
+//important variables for retries
+static coolant_state_t current_cooolant_state;
+static sys_state_t current_state; 
+
 #define PICOHAL_ADDRESS 10
+#define QUEUE_SIZE 10
+
+typedef struct {
+    uint16_t index;
+    modbus_message_t picohal_packet;
+} QueueItem;
+
+QueueItem message_queue[QUEUE_SIZE];
+int front = 0;
+int rear = -1;
+int item_count = 0;
+modbus_message_t current_message;
+modbus_message_t * current_msg_ptr = &current_message;
+uint16_t current_index;
+
+static bool enqueue_message(modbus_message_t data) {
+    static uint16_t message_index;
+    if (item_count == QUEUE_SIZE) {
+        report_message("Error: queue is full", Message_Info);
+        return 0;
+    }
+    /*report_message("queue_message", Message_Info);
+    sprintf(buf, "item_count: %d",item_count);
+    report_message(buf, Message_Plain);
+    sprintf(buf, "message_index: %d",message_index);
+    report_message(buf, Message_Plain); 
+    */   
+    rear = (rear + 1) % QUEUE_SIZE;
+    message_queue[rear].picohal_packet = data;
+    message_queue[rear].index = message_index;
+    message_queue[rear].picohal_packet.context = &message_queue[rear].index;
+    message_index++;
+    item_count++;
+    /*
+    sprintf(buf, "enq_context: %d",*((uint16_t*)message_queue[rear].picohal_packet.context));
+    report_message(buf, Message_Plain);
+    sprintf(buf, "fr: %d rr: %d",front,rear);
+    report_message(buf, Message_Plain);
+    */    
+        return 1;
+}
+
+static bool dequeue_message() {
+    if (item_count == 0) {
+        report_message("Error: queue is empty", Message_Info);
+        return 0;
+    }
+    //picohal_packet = &message_queue[front].picohal_packet;
+    current_message = (message_queue[front].picohal_packet);
+    front = (front + 1) % QUEUE_SIZE;
+    item_count--;
+    return 1;
+}
+
+static bool peek_message() {
+    if (item_count == 0) {
+        //report_message("Error: queue is empty", Message_Info);
+        return 0;
+    }
+    current_message = (message_queue[front].picohal_packet);
+    //sprintf(buf, "peek_context f: %p",*picohal_packet->context);
+    //sprintf(buf, "peek_context: %d",19535); 
+
+    return 1;
+}
+
+static void picohal_send (){
+
+    uint32_t ms = hal.get_elapsed_ticks();
+
+    //value =55;
+
+    //can only send if there is something in the queue.
+
+    if (ms<1000)
+        return;
+
+    if(peek_message()){
+        modbus_send(current_msg_ptr, &callbacks, false);
+    }
+}
+
+static void picohal_rx_packet (modbus_message_t *msg)
+{
+    //check the context/index and pop it off the queue if it matches.
+    sprintf(buf, "recv_context:%d current_context: %d",*((uint16_t*)msg->context), *((uint16_t*)current_msg_ptr->context));
+    report_message(buf, Message_Plain);
+    if(*((uint16_t*)msg->context) == *((uint16_t*)current_msg_ptr->context)){
+        dequeue_message();
+    }
+    //else it should stay on the queue to be re-transmitted.
+    
+}
 
 static void picohal_set_state ()
-{
+{   
     uint16_t data;
 
-        switch (state_get()){
+        switch (current_state){
         case STATE_ALARM:
             data = 1;
             break;
@@ -86,8 +185,8 @@ static void picohal_set_state ()
             break;                                                        
     }
 
-    modbus_message_t rpm_cmd = {
-        .context = (void *)picohal_SetState,
+    modbus_message_t cmd = {
+        .context = NULL,
         .crc_check = false,
         .adu[0] = PICOHAL_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
@@ -97,90 +196,90 @@ static void picohal_set_state ()
         .adu[5] = data & 0xFF,
         .tx_length = 8,
         .rx_length = 8
-    };
+    };  
 
-    modbus_send(&rpm_cmd, &callbacks, true);
+    enqueue_message(cmd);
+
+    //sprintf(buf, "currrent: %d", modbus_get_queue_status());
+    //report_message(buf, Message_Plain);
+    //modbus_send(&cmd, &callbacks, false);
 }
 
-static void picohal_write_event (uint16_t current_event)
-{
-    modbus_message_t rpm_cmd = {
-        .context = (void *)picohal_SetEvent,
-        .crc_check = false,
-        .adu[0] = PICOHAL_ADDRESS,
-        .adu[1] = ModBus_WriteRegister,
-        .adu[2] = 0x00,
-        .adu[3] = 0x05,
-        .adu[4] = current_event >> 8,
-        .adu[5] = current_event & 0xFF,
-        .tx_length = 8,
-        .rx_length = 8
-    };
-
-    modbus_send(&rpm_cmd, &callbacks, true);
-}
-
-static void picohal_write_coolant (coolant_state_t state)
-{   
+static void picohal_set_coolant ()
+{       
     //set coolant state in register 0x100
-    modbus_message_t rpm_cmd = {
-        .context = (void *)picohal_SetCoolant,
+    modbus_message_t cmd = {
+        .context = NULL,
         .crc_check = false,
         .adu[0] = PICOHAL_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x01,
         .adu[3] = 0x00,
         .adu[4] = 0x00,
-        .adu[5] = state.value & 0xFF,
+        .adu[5] = current_cooolant_state.value & 0xFF,
         .tx_length = 8,
         .rx_length = 8
     };
-
-    modbus_send(&rpm_cmd, &callbacks, true);
+    //modbus_send(&cmd, &callbacks, false);
+    enqueue_message(cmd);
 }
 
-static void picohal_rx_packet (modbus_message_t *msg)
-{
-    if(!(msg->adu[0] & 0x80)) {
+static void picohal_create_event (picohal_events event){
 
-        switch((picohal_response_t)msg->context) {
-
-            case picohal_SetState:
-            case picohal_SetEvent:
-                retry_counter = 0;
-                break;
-
-            default:
-                retry_counter = 0;
-                break;
-        }
-    }
+    modbus_message_t cmd = {
+        .context = NULL,
+        .crc_check = false,
+        .adu[0] = PICOHAL_ADDRESS,
+        .adu[1] = ModBus_WriteRegister,
+        .adu[2] = 0x00,
+        .adu[3] = 0x05,
+        .adu[4] = event >> 8,
+        .adu[5] = event & 0xFF,
+        .tx_length = 8,
+        .rx_length = 6
+    };
+    enqueue_message(cmd);
 }
 
 static void picohal_rx_exception (uint8_t code, void *context)
 {
-    //if RX exceptions during one of the VFD messages, need to retry.
-    if ((picohal_response_t)context > 0 ) {
-        retry_counter++;
-        if (retry_counter >=PICOHAL_RETRIES) {
-            report_message("PicoHAL Communications Failure!", Message_Warning);
-            retry_counter = 0;
-            return;
-        }
+    
+    uint8_t value = *((uint8_t*)context);
+    
+    report_message("picohal_rx_exception", Message_Warning);
+    sprintf(buf, "COMM CODE: %d", code);
+    report_message(buf, Message_Plain);   
+    sprintf(buf, "CONTEXT: %d", value);
+    report_message(buf, Message_Plain);             
+    //if RX exceptions during one of the messages, need to retry.
+}
 
-        switch((picohal_response_t)context) {
+static void picohal_poll (void)
+{
+    static uint32_t last_ms;
+    uint32_t ms = hal.get_elapsed_ticks();
 
-            case picohal_SetState:
-//                modbus_reset();
-                break;
+    //control the rate at which the queue is emptied.
+    if(ms < last_ms + POLLING_INTERVAL)
+        return;
 
-            default:
-                break;
-        }//close switch statement
-    } else {
-        retry_counter = 0;
-        report_message("PicoHAL comms failure 2!", Message_Warning);
+    //if there is a message try to send it.
+    if(item_count){
+        picohal_send();
+        last_ms = ms;
     }
+}
+
+static void picohal_poll_realtime (sys_state_t grbl_state)
+{
+    on_execute_realtime(grbl_state);
+    picohal_poll();
+}
+
+static void picohal_poll_delay (sys_state_t grbl_state)
+{
+    on_execute_delay(grbl_state);
+    picohal_poll();
 }
 
 static void onReportOptions (bool newopt)
@@ -194,7 +293,8 @@ static void onReportOptions (bool newopt)
 
 static void onCoolantChanged (coolant_state_t state){
 
-    picohal_write_coolant(state);
+    current_cooolant_state = state;
+    picohal_set_coolant();
 
     if (on_coolant_changed)         // Call previous function in the chain.
         on_coolant_changed(state);    
@@ -202,6 +302,7 @@ static void onCoolantChanged (coolant_state_t state){
 
 static void onStateChanged (sys_state_t state)
 {
+    current_state = state;
     picohal_set_state();
     if (on_state_change)         // Call previous function in the chain.
         on_state_change(state);    
@@ -210,7 +311,8 @@ static void onStateChanged (sys_state_t state)
 static bool onProbeStart (axes_signals_t axes, float *target, plan_line_data_t *pl_data)
 {
     //write the program flow value to the event register.
-    picohal_write_event(PROBE_START);
+    //enqueue(PROBE_START);
+    picohal_create_event(PROBE_START);
     
     if(on_probe_start)
         on_probe_start(axes, target, pl_data);
@@ -221,7 +323,8 @@ static bool onProbeStart (axes_signals_t axes, float *target, plan_line_data_t *
 static void onProbeCompleted ()
 {
     //write the program flow value to the event register.
-    picohal_write_event(PROBE_COMPLETED);
+    //enqueue(PROBE_COMPLETED);
+    picohal_create_event(PROBE_COMPLETED);
     
     if(on_probe_completed)
         on_probe_completed();
@@ -230,7 +333,8 @@ static void onProbeCompleted ()
 static bool onProbeFixture (tool_data_t *tool, bool at_g59_3, bool on)
 {
     //write the program flow value to the event register.
-    picohal_write_event(PROBE_FIXTURE);
+    //enqueue(PROBE_FIXTURE);
+    picohal_create_event(PROBE_FIXTURE);
     
     if(on_probe_fixture)
         on_probe_fixture(tool, at_g59_3, on);
@@ -242,7 +346,8 @@ static bool onProbeFixture (tool_data_t *tool, bool at_g59_3, bool on)
 static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
 {
     //write the program flow value to the event register.
-    picohal_write_event(PROGRAM_COMPLETED);
+    //enqueue(PROGRAM_COMPLETED);
+    picohal_create_event(PROGRAM_COMPLETED);
     
     if(on_program_completed)
         on_program_completed(program_flow, check_mode);
@@ -273,19 +378,18 @@ void picohal_init (void)
     grbl.on_probe_completed = onProbeCompleted; 
 
     on_probe_fixture = grbl.on_probe_fixture;               //subscribe to probe start
-    grbl.on_probe_fixture = onProbeFixture;     
+    grbl.on_probe_fixture = onProbeFixture;
+
+    on_execute_realtime = grbl.on_execute_realtime;
+    grbl.on_execute_realtime = picohal_poll_realtime;
+
+    on_execute_delay = grbl.on_execute_delay;
+    grbl.on_execute_delay = picohal_poll_delay;         
 
     on_program_completed = grbl.on_program_completed;   // Subscribe to on program completed events (lightshow on complete?)
     grbl.on_program_completed = onProgramCompleted;     // Checkered Flag for successful end of program lives here
 
     driver_reset = hal.driver_reset;                    // Subscribe to driver reset event
     hal.driver_reset = driverReset;
-
-    //subscribe to following events:
-    //coolant
-    //spindle
-    //typedef bool (*on_probe_start_ptr)(axes_signals_t axes, float *target, plan_line_data_t *pl_data);
-    //typedef void (*on_probe_completed_ptr)(void);
-    //typedef void (*on_toolchange_ack_ptr)(void);
 
 }
