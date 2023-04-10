@@ -19,6 +19,6 @@ In addition, there are plug headers for the following:
   - Buffered 5V Neopixel driver
   - 5V tolerant user input
   
-Finally it has I2C exposed to eaily mount a small 1.3 inch OLED for more visual feedback.
+Finally it has I2C exposed to easily mount a small 1.3 inch OLED for more visual feedback.
 
 ![image](https://user-images.githubusercontent.com/6061539/231016314-3fe6b36d-4816-46b0-a46a-63353316b156.png)
