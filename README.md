@@ -2,14 +2,13 @@
 
 This plugin adds support for connecting the PicoHAL board over Modbus to GRBLHAL.  Preliminary code, both hardware and firmware are work-in-progress.
 
-The PicoHAL has the following characteristics:
+#### The PicoHAL has the following characteristics:
+  - Familiar Arduino Uno inspired form factor
+  - 5-12V power input (can be USB powered)
+  - Works with CNC shield
+  - Works with Relay shield
 
-Familiar Arduino Uno inspired form factor
-5-12V power input (can be USB powered)
-Works with CNC shield
-Works with Relay shield
-
-Shield I/O:
+#### Shield I/O:
   - 9 5V outputs
   - 9 5V tolerant inputs
   - 5V UART interface
