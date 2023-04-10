@@ -37,7 +37,7 @@
 #include "spindle/modbus.h"
 
 #define RETRY_DELAY         250
-#define POLLING_INTERVAL    250
+#define POLLING_INTERVAL    100
 #define PICOHAL_RETRIES     5
 
 typedef enum {

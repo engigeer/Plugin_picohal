@@ -42,8 +42,6 @@ static on_execute_realtime_ptr on_execute_realtime, on_execute_delay;
 
 static uint16_t retry_counter = 0;
 
-static char buf[128];
-
 static void picohal_rx_packet (modbus_message_t *msg);
 static void picohal_rx_exception (uint8_t code, void *context);
 
@@ -57,7 +55,7 @@ static coolant_state_t current_cooolant_state;
 static sys_state_t current_state; 
 
 #define PICOHAL_ADDRESS 10
-#define QUEUE_SIZE 10
+#define QUEUE_SIZE 8
 
 typedef struct {
     uint16_t index;
@@ -75,36 +73,23 @@ uint16_t current_index;
 static bool enqueue_message(modbus_message_t data) {
     static uint16_t message_index;
     if (item_count == QUEUE_SIZE) {
-        report_message("Error: queue is full", Message_Info);
+        report_message("Warning: PicoHAL queue is full.", Message_Warning);
         return 0;
     }
-    /*report_message("queue_message", Message_Info);
-    sprintf(buf, "item_count: %d",item_count);
-    report_message(buf, Message_Plain);
-    sprintf(buf, "message_index: %d",message_index);
-    report_message(buf, Message_Plain); 
-    */   
     rear = (rear + 1) % QUEUE_SIZE;
     message_queue[rear].picohal_packet = data;
     message_queue[rear].index = message_index;
     message_queue[rear].picohal_packet.context = &message_queue[rear].index;
     message_index++;
     item_count++;
-    /*
-    sprintf(buf, "enq_context: %d",*((uint16_t*)message_queue[rear].picohal_packet.context));
-    report_message(buf, Message_Plain);
-    sprintf(buf, "fr: %d rr: %d",front,rear);
-    report_message(buf, Message_Plain);
-    */    
         return 1;
 }
 
 static bool dequeue_message() {
     if (item_count == 0) {
-        report_message("Error: queue is empty", Message_Info);
+        //report_message("Error: queue is empty", Message_Info);
         return 0;
     }
-    //picohal_packet = &message_queue[front].picohal_packet;
     current_message = (message_queue[front].picohal_packet);
     front = (front + 1) % QUEUE_SIZE;
     item_count--;
@@ -113,7 +98,6 @@ static bool dequeue_message() {
 
 static bool peek_message() {
     if (item_count == 0) {
-        //report_message("Error: queue is empty", Message_Info);
         return 0;
     }
     current_message = (message_queue[front].picohal_packet);
@@ -127,12 +111,9 @@ static void picohal_send (){
 
     uint32_t ms = hal.get_elapsed_ticks();
 
-    //value =55;
-
     //can only send if there is something in the queue.
-
-    if (ms<1000)
-        return;
+    //if (ms<1000)
+    //    return;
 
     if(peek_message()){
         modbus_send(current_msg_ptr, &callbacks, false);
@@ -142,8 +123,8 @@ static void picohal_send (){
 static void picohal_rx_packet (modbus_message_t *msg)
 {
     //check the context/index and pop it off the queue if it matches.
-    sprintf(buf, "recv_context:%d current_context: %d",*((uint16_t*)msg->context), *((uint16_t*)current_msg_ptr->context));
-    report_message(buf, Message_Plain);
+    //sprintf(buf, "recv_context:%d current_context: %d",*((uint16_t*)msg->context), *((uint16_t*)current_msg_ptr->context));
+    //report_message(buf, Message_Plain);
     if(*((uint16_t*)msg->context) == *((uint16_t*)current_msg_ptr->context)){
         dequeue_message();
     }
@@ -198,11 +179,12 @@ static void picohal_set_state ()
         .rx_length = 8
     };  
 
-    enqueue_message(cmd);
+    char buf[16];    
+    report_message("Setstate", Message_Warning);
+    sprintf(buf, "CODE: %d", data);
+    report_message(buf, Message_Plain);   
 
-    //sprintf(buf, "currrent: %d", modbus_get_queue_status());
-    //report_message(buf, Message_Plain);
-    //modbus_send(&cmd, &callbacks, false);
+    enqueue_message(cmd);
 }
 
 static void picohal_set_coolant ()
@@ -220,7 +202,6 @@ static void picohal_set_coolant ()
         .tx_length = 8,
         .rx_length = 8
     };
-    //modbus_send(&cmd, &callbacks, false);
     enqueue_message(cmd);
 }
 
@@ -236,7 +217,7 @@ static void picohal_create_event (picohal_events event){
         .adu[4] = event >> 8,
         .adu[5] = event & 0xFF,
         .tx_length = 8,
-        .rx_length = 6
+        .rx_length = 8
     };
     enqueue_message(cmd);
 }
@@ -245,13 +226,14 @@ static void picohal_rx_exception (uint8_t code, void *context)
 {
     
     uint8_t value = *((uint8_t*)context);
+    char buf[16];
     
     report_message("picohal_rx_exception", Message_Warning);
-    sprintf(buf, "COMM CODE: %d", code);
+    sprintf(buf, "CODE: %d", code);
     report_message(buf, Message_Plain);   
-    sprintf(buf, "CONTEXT: %d", value);
+    sprintf(buf, "CONT: %d", value);
     report_message(buf, Message_Plain);             
-    //if RX exceptions during one of the messages, need to retry.
+    //if RX exceptions during one of the messages, need to retry?
 }
 
 static void picohal_poll (void)
@@ -259,9 +241,9 @@ static void picohal_poll (void)
     static uint32_t last_ms;
     uint32_t ms = hal.get_elapsed_ticks();
 
-    //control the rate at which the queue is emptied.
+    //control the rate at which the queue is emptied to avoid filling the modbus queue
     if(ms < last_ms + POLLING_INTERVAL)
-        return;
+        return;    
 
     //if there is a message try to send it.
     if(item_count){
