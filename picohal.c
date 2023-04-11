@@ -135,6 +135,7 @@ static void picohal_rx_packet (modbus_message_t *msg)
 static void picohal_set_state ()
 {   
     uint16_t data;
+    uint16_t alarm_code;
 
         switch (current_state){
         case STATE_ALARM:
@@ -172,19 +173,34 @@ static void picohal_set_state ()
         .adu[0] = PICOHAL_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x00,
-        .adu[3] = 0x01,
+        .adu[3] = 0x01, //status register
         .adu[4] = data >> 8,
         .adu[5] = data & 0xFF,
         .tx_length = 8,
         .rx_length = 8
-    };  
-
-    char buf[16];    
-    report_message("Setstate", Message_Warning);
-    sprintf(buf, "CODE: %d", data);
-    report_message(buf, Message_Plain);   
-
+    };
     enqueue_message(cmd);
+
+    //if in alarm state, write the alarm code to the alarm register.
+    if (data == STATE_ALARM){
+
+        alarm_code = (uint16_t) sys.alarm;
+
+        modbus_message_t code_cmd = {
+            .context = NULL,
+            .crc_check = false,
+            .adu[0] = PICOHAL_ADDRESS,
+            .adu[1] = ModBus_WriteRegister,
+            .adu[2] = 0x00,
+            .adu[3] = 0x02, //alarm code register.
+            .adu[4] = alarm_code >> 8,
+            .adu[5] = alarm_code & 0xFF,
+            .tx_length = 8,
+            .rx_length = 8
+        };
+        enqueue_message(code_cmd); 
+    }
+
 }
 
 static void picohal_set_coolant ()
