@@ -1,10 +1,12 @@
 /*
 
-  shared.h - shared spindle plugin symbols
+  picohal.h
 
   Part of grblHAL
-
+  grblHAL is
   Copyright (c) 2022-2023 Terje Io
+
+  picoHAL design and plugin code are copyright (c) 2023 Expatria Technologies Inc.
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -33,7 +35,6 @@
 #include "grbl/report.h"
 #endif
 
-//#include <modbus.h>
 #include "spindle/modbus.h"
 
 #define RETRY_DELAY         250
@@ -41,18 +42,12 @@
 #define PICOHAL_RETRIES     5
 
 typedef enum {
-    picohal_Idle = 0,
-    picohal_SetState,
-    picohal_SetCoolant,
-    picohal_SetEvent
-} picohal_response_t;
-
-typedef enum {
     TOOLCHANGE_ACK = 0,
     PROBE_START = 1,
     PROBE_COMPLETED = 2,
     PROBE_FIXTURE = 3,
     PROGRAM_COMPLETED = 30,
+    HOMING_COMPLETED = 31,
     INVALID_EVENT = 255,
 } picohal_events;
 

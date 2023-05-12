@@ -238,6 +238,24 @@ static void picohal_create_event (picohal_events event){
     enqueue_message(cmd);
 }
 
+static void picohal_set_homing_status (){
+    /*
+    modbus_message_t cmd = {
+        .context = NULL,
+        .crc_check = false,
+        .adu[0] = PICOHAL_ADDRESS,
+        .adu[1] = ModBus_WriteRegister,
+        .adu[2] = 0x00,
+        .adu[3] = 0x05,
+        .adu[4] = event >> 8,
+        .adu[5] = event & 0xFF,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    enqueue_message(cmd);
+    */
+}
+
 static void picohal_rx_exception (uint8_t code, void *context)
 {
     
@@ -355,6 +373,7 @@ static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
 static void driverReset (void)
 {
     picohal_set_state();
+    picohal_set_homing_status();
     driver_reset();
 }
 
@@ -391,3 +410,5 @@ void picohal_init (void)
     hal.driver_reset = driverReset;
 
 }
+
+//add homing completed event.  picohal_set_homing_status to update the homing state.
