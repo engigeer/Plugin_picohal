@@ -15,7 +15,7 @@ This plugin adds support for connecting the PicoHAL board over Modbus to GRBLHAL
   - 2 analog inputs
 
 In addition, there are plug headers for the following:
-  - 4 2 amp relay drivers (Labelled Red/Green/Blue/White
+  - 4 2 amp relay drivers (Labelled Red/Green/Blue/White)
   - Buffered 5V Neopixel driver
   - 5V tolerant user input
   
