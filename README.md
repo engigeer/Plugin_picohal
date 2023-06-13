@@ -6,6 +6,7 @@
 This plugin adds support for connecting the PicoHAL board over Modbus to GRBLHAL.  Preliminary code, both hardware and firmware are work-in-progress.
 
 #### The PicoHAL has the following characteristics:
+  - RP2040 MCU
   - Familiar Arduino Uno inspired form factor
   - RS485 input and pass-through
   - 5-24V power input (can be USB powered)
