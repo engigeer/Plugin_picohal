@@ -1,6 +1,6 @@
 ![Logo](/readme_images/logo_sm.jpg)
 # PicoHAL GRBLHAL Plugin
-Micropython firmware for the PicoHAL
+
 <img src="/readme_images/Board_Photo.jpg" width="800">
 
 This plugin adds support for connecting the PicoHAL board over Modbus to GRBLHAL.  Preliminary code, both hardware and firmware are work-in-progress.
