@@ -16,8 +16,8 @@ This plugin adds support for connecting the PicoHAL board over Modbus to GRBLHAL
   - Works with stackable relay shields
 
 #### Shield I/O:
-
+Arduino I/O connected to similar function RP2040 pins.
 
 In addition, there are plug headers for the following:
-  - Two buffered 5V output signals for Neopixels or other I/O
+ - Two buffered 5V output signals for Neopixels or other I/O
 
