@@ -28,14 +28,15 @@
 #include "../../grbl/protocol.h"
 #include "../../grbl/state_machine.h"
 #include "../../grbl/report.h"
+#include "../../grbl/modbus.h"
 #else
 #include "grbl/hal.h"
 #include "grbl/protocol.h"
 #include "grbl/state_machine.h"
 #include "grbl/report.h"
+#include "grbl/modbus.h"
 #endif
 
-#include "spindle/modbus.h"
 
 #define RETRY_DELAY         250
 #define POLLING_INTERVAL    100
