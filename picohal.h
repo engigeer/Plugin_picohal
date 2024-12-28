@@ -24,11 +24,11 @@
 */
 
 #ifdef ARDUINO
-#include "../../grbl/hal.h"
-#include "../../grbl/protocol.h"
-#include "../../grbl/state_machine.h"
-#include "../../grbl/report.h"
-#include "../../grbl/modbus.h"
+#include "../grbl/hal.h"
+#include "../grbl/protocol.h"
+#include "../grbl/state_machine.h"
+#include "../grbl/report.h"
+#include "../grbl/modbus.h"
 #else
 #include "grbl/hal.h"
 #include "grbl/protocol.h"
@@ -51,5 +51,30 @@ typedef enum {
     HOMING_COMPLETED = 31,
     INVALID_EVENT = 255,
 } picohal_events;
+
+typedef union {
+    uint8_t bits;                  //!< Bitmask bits
+    uint8_t mask;                  //!< Bitmask
+    uint8_t value;                 //!< Bitmask value
+    struct {
+        uint8_t ready          :1, //!< 
+                mains          :1, //!< 
+                guide          :1, //!< 
+                enable         :1, //!< 
+                unused         :4;
+    };
+} IPG_state_t;
+
+typedef union {
+    uint8_t bits;                  //!< Bitmask bits
+    uint8_t mask;                  //!< Bitmask
+    uint8_t value;                 //!< Bitmask value
+    struct {
+        uint8_t argon          :1, //!< 
+                powder1        :1, //!< 
+                powder2        :1, //!< 
+                unused         :5;
+    };
+} BLC_state_t;
 
 /**/
