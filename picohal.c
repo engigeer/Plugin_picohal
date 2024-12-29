@@ -42,7 +42,6 @@ static on_realtime_report_ptr on_realtime_report;
 static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_data_t spindle_data = {0};
-//static spindle_state_t vfd_state = {0};
 
 static uint16_t retry_counter = 0;
 
@@ -293,6 +292,8 @@ static void spindleSetSpeed (spindle_ptrs_t *spindle, float rpm)
         .tx_length = 8,
         .rx_length = 8
     };
+
+    modbus_send(&mode_cmd, &callbacks, false);
 }
 
 // Start or stop spindle
@@ -324,22 +325,7 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
-    // modbus_message_t mode_cmd = {
-    //     .context = (void *)SPINDLE_GetStatus,
-    //     .crc_check = false,
-    //     .adu[0] = PICOHAL_ADDRESS,
-    //     .adu[1] = ModBus_ReadHoldingRegisters,
-    //     .adu[2] = 0x05,
-    //     .adu[3] = 0x00,
-    //     .adu[4] = 0x00,
-    //     .adu[5] = 0x01,
-    //     .tx_length = 8,
-    //     .rx_length = 7
-    // };
 
-    // modbus_send(&mode_cmd, &callbacks, false); // TODO: add flag for not raising alarm?
-
-    //return vfd_state; // return previous state as we do not want to wait for the response
 }
 
 static void raise_alarm (void *data)
@@ -573,7 +559,7 @@ static const spindle_ptrs_t spindle = {
         .at_speed = Off,
         .direction = Off,
         .cmd_controlled = On,
-        .laser = On //TODO: ADD LASER CAPABILITY
+        .laser = On //TODO: TEST LASER CAPABILITY
     },
     .config = spindleConfig,
     .set_state = spindleSetState,
