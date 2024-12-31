@@ -42,6 +42,7 @@ static on_realtime_report_ptr on_realtime_report;
 static spindle_id_t spindle_id;
 static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_data_t spindle_data = {0};
+static spindle_state_t spindle_state = {0};
 
 static uint16_t retry_counter = 0;
 
@@ -126,8 +127,8 @@ static void picohal_send (){
 static void picohal_rx_packet (modbus_message_t *msg)
 {
     //check the context/index and pop it off the queue if it matches.
-    //sprintf(buf, "recv_context:%d current_context: %d",*((uint16_t*)msg->context), *((uint16_t*)current_msg_ptr->context));
-    //report_message(buf, Message_Plain);
+    // sprintf(buf, "recv_context:%d current_context: %d",*((uint16_t*)msg->context), *((uint16_t*)current_msg_ptr->context));
+    // report_message(buf, Message_Plain);
     if(*((uint16_t*)msg->context) == *((uint16_t*)current_msg_ptr->context)){
         dequeue_message();
     }
@@ -276,19 +277,17 @@ static void picohal_create_event (picohal_events event){
     };
     enqueue_message(cmd);
 }
-
-
-static void spindleSetSpeed (spindle_ptrs_t *spindle, float rpm)
+static void spindleSetRPM (float rpm, bool block)
 {
     modbus_message_t mode_cmd = {
-        .context = (void *)SPINDLE_SetSpeed,
+        .context = NULL,
         .crc_check = false,
         .adu[0] = PICOHAL_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x02,
         .adu[3] = 0x01,
         .adu[4] = 0x00,
-        .adu[5] = 0x00, //NEED TO CONFIGURE USING RPM
+        .adu[5] = (rpm == 0.0f) ? 0x00 : 0x01, //NEED TO CONFIGURE USING RPM
         .tx_length = 8,
         .rx_length = 8
     };
@@ -296,11 +295,20 @@ static void spindleSetSpeed (spindle_ptrs_t *spindle, float rpm)
     modbus_send(&mode_cmd, &callbacks, false);
 }
 
+static void spindleSetSpeed (spindle_ptrs_t *spindle, float rpm)
+{
+    UNUSED(spindle);
+
+    spindleSetRPM(rpm, false);
+}
+
 // Start or stop spindle
 static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, float rpm)
 {
+    UNUSED(spindle);
+
     modbus_message_t mode_cmd = {
-        .context = (void *)SPINDLE_SetStatus,
+        .context = NULL,
         .crc_check = false,
         .adu[0] = PICOHAL_ADDRESS,
         .adu[1] = ModBus_WriteRegister,
@@ -312,20 +320,19 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         .rx_length = 8
     };
 
+    spindle_state.on = state.on;
+    spindle_state.ccw = state.ccw;
 
-    // if(vfd_state.ccw != state.ccw)
-    //     spindle_data.rpm_programmed = 0.0f;
-
-    // vfd_state.on = state.on;
-    // vfd_state.ccw = state.ccw;
-
-    modbus_send(&mode_cmd, &callbacks, false);
+    if(modbus_send(&mode_cmd, &callbacks, false))
+        spindleSetRPM(rpm, true);
 }
 
 // Returns spindle state in a spindle_state_t variable
 static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
 {
+    UNUSED(spindle);
 
+    return spindle_state;
 }
 
 static void raise_alarm (void *data)

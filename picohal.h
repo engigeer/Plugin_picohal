@@ -71,13 +71,13 @@ typedef enum {
     INVALID_EVENT = 255,
 } picohal_events;
 
-typedef enum {
-    SPINDLE_Idle = 0,
-    SPINDLE_SetSpeed,
-    SPINDLE_GetSpeed,
-    SPINDLE_GetStatus,
-    SPINDLE_SetStatus,
-} picohal_response_t;
+// typedef enum {
+//     SPINDLE_Idle = 0,
+//     SPINDLE_SetSpeed,
+//     SPINDLE_GetSpeed,
+//     SPINDLE_GetStatus,
+//     SPINDLE_SetStatus,
+// } picohal_response_t;
 
 typedef union {
     uint8_t bits;                  //!< Bitmask bits
