@@ -45,21 +45,23 @@
 #define POLLING_INTERVAL    100
 #define PICOHAL_RETRIES     5
 
-const user_mcode_t LaserReady_On   = (user_mcode_t)510;
-const user_mcode_t LaserReady_Off  = (user_mcode_t)511;
-const user_mcode_t LaserMains_On   = (user_mcode_t)512;
-const user_mcode_t LaserMains_Off  = (user_mcode_t)513;
-const user_mcode_t LaserGuide_On   = (user_mcode_t)514;
-const user_mcode_t LaserGuide_Off  = (user_mcode_t)515;
-const user_mcode_t LaserEnable_On  = (user_mcode_t)516;
-const user_mcode_t LaserEnable_Off = (user_mcode_t)517;
+typedef enum {
+    LaserReady_On   = 510,
+    LaserReady_Off  = 511,
+    LaserMains_On   = 512,
+    LaserMains_Off  = 513,
+    LaserGuide_On   = 514,
+    LaserGuide_Off  = 515,
+    LaserEnable_On  = 516,
+    LaserEnable_Off = 517,
 
-const user_mcode_t Argon_On    = (user_mcode_t)520;
-const user_mcode_t Argon_Off   = (user_mcode_t)521;
-const user_mcode_t Powder1_On  = (user_mcode_t)522;
-const user_mcode_t Powder1_Off = (user_mcode_t)523;
-const user_mcode_t Powder2_On  = (user_mcode_t)524;
-const user_mcode_t Powder2_Off = (user_mcode_t)525;
+    Argon_On    = 520,
+    Argon_Off   = 521,
+    Powder1_On  = 522,
+    Powder1_Off = 523,
+    Powder2_On  = 524,
+    Powder2_Off = 525
+} picohal_mcode_t;
 
 typedef enum {
     TOOLCHANGE_ACK = 0,
@@ -103,5 +105,7 @@ typedef union {
                 unused         :5;
     };
 } BLC_state_t;
+
+void picohal_init (void);
 
 /**/

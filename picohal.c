@@ -44,7 +44,7 @@ static spindle_ptrs_t *spindle_hal = NULL;
 static spindle_data_t spindle_data = {0};
 static spindle_state_t spindle_state = {0};
 
-static uint16_t retry_counter = 0;
+//static uint16_t retry_counter = 0;
 
 static void picohal_rx_packet (modbus_message_t *msg);
 static void picohal_rx_exception (uint8_t code, void *context);
@@ -113,7 +113,7 @@ static bool peek_message() {
 
 static void picohal_send (){
 
-    uint32_t ms = hal.get_elapsed_ticks();
+    //uint32_t ms = hal.get_elapsed_ticks();
 
     //can only send if there is something in the queue.
     //if (ms<1000)
@@ -335,10 +335,10 @@ static spindle_state_t spindleGetState (spindle_ptrs_t *spindle)
     return spindle_state;
 }
 
-static void raise_alarm (void *data)
+/* static void raise_alarm (void *data)
 {
     system_raise_alarm(Alarm_Spindle);
-}
+} */
 
 static void picohal_rx_exception (uint8_t code, void *context)
 {
@@ -389,10 +389,10 @@ static void picohal_poll_delay (sys_state_t grbl_state)
 // check - check if M-code is handled here.
 static user_mcode_type_t check (user_mcode_t mcode)
 {
-    return (mcode == LaserReady_On || mcode == LaserReady_Off ||
-            mcode == LaserMains_On || mcode == LaserMains_Off ||
-            mcode == Argon_On || mcode == Argon_Off ||
-            mcode == Powder1_On || mcode == Powder1_Off
+    return ((picohal_mcode_t)mcode == LaserReady_On || (picohal_mcode_t)mcode == LaserReady_Off ||
+            (picohal_mcode_t)mcode == LaserMains_On || (picohal_mcode_t)mcode == LaserMains_Off ||
+            (picohal_mcode_t)mcode == Argon_On || (picohal_mcode_t)mcode == Argon_Off ||
+            (picohal_mcode_t)mcode == Powder1_On || (picohal_mcode_t)mcode == Powder1_Off
             )
                      ? UserMCode_Normal //  Handled by us. Set to UserMCode_NoValueWords if there are any parameter words (letters) without an accompanying value.
                      : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Unsupported);	// If another handler present then call it or return ignore.
@@ -403,7 +403,7 @@ static status_code_t validate (parser_block_t *gc_block)
 {
     status_code_t state = Status_OK;
 
-    switch(gc_block->user_mcode) {
+    switch((picohal_mcode_t)gc_block->user_mcode) {
 
         case LaserReady_On:
             break;
@@ -436,7 +436,7 @@ static void execute (sys_state_t state, parser_block_t *gc_block)
 {
     bool handled = true;
 
-    switch(gc_block->user_mcode) {
+    switch((picohal_mcode_t)gc_block->user_mcode) {
 
         case LaserReady_On:
             current_IPG_state.ready = 1;
@@ -525,10 +525,10 @@ static void picohal_realtime_report (stream_write_ptr stream_write, report_track
     //picohal_get_update() should this be above or here?
 }
 
-static spindle_data_t *spindleGetData (spindle_data_request_t request)
+/* static spindle_data_t *spindleGetData (spindle_data_request_t request)
 {
     return &spindle_data;
-}
+} */
 
 static void onSpindleSelected (spindle_ptrs_t *spindle)
 {
@@ -556,6 +556,7 @@ static void driverReset (void)
 static bool spindleConfig (spindle_ptrs_t *spindle)
 {
     //return modbus_isup();
+    return true;
 }
 
 static const spindle_ptrs_t spindle = {
