@@ -393,6 +393,7 @@ static user_mcode_type_t check (user_mcode_t mcode)
 {
     return ((picohal_mcode_t)mcode == LaserReady_On || (picohal_mcode_t)mcode == LaserReady_Off ||
             (picohal_mcode_t)mcode == LaserMains_On || (picohal_mcode_t)mcode == LaserMains_Off ||
+            (picohal_mcode_t)mcode == LaserGuide_On || (picohal_mcode_t)mcode == LaserGuide_Off ||
             (picohal_mcode_t)mcode == Argon_On || (picohal_mcode_t)mcode == Argon_Off ||
             (picohal_mcode_t)mcode == Powder1_On || (picohal_mcode_t)mcode == Powder1_Off
             )
@@ -414,6 +415,10 @@ static status_code_t validate (parser_block_t *gc_block)
         case LaserMains_On:
             break;
         case LaserMains_Off:
+            break;
+        case LaserGuide_On:
+            break;
+        case LaserGuide_Off:
             break;
         case Argon_On:
             break;
@@ -454,6 +459,14 @@ static void execute (sys_state_t state, parser_block_t *gc_block)
             break;
         case LaserMains_Off:
             current_IPG_state.mains = 0;
+            picohal_set_IPG_output(current_IPG_state);
+            break;
+        case LaserGuide_On:
+            current_IPG_state.guide = 1;
+            picohal_set_IPG_output(current_IPG_state);
+            break;
+        case LaserGuide_Off:
+            current_IPG_state.guide = 0;
             picohal_set_IPG_output(current_IPG_state);
             break;
         case Argon_On:
