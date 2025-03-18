@@ -279,6 +279,8 @@ static void picohal_create_event (picohal_events event){
 }
 static void spindleSetRPM (float rpm, bool block)
 {
+    uint16_t rpm_value = (uint16_t)rpm; // convert float to integer
+
     modbus_message_t mode_cmd = {
         .context = NULL,
         .crc_check = false,
@@ -286,8 +288,8 @@ static void spindleSetRPM (float rpm, bool block)
         .adu[1] = ModBus_WriteRegister,
         .adu[2] = 0x02,
         .adu[3] = 0x01,
-        .adu[4] = 0x00,
-        .adu[5] = (rpm == 0.0f) ? 0x00 : 0x01, //NEED TO CONFIGURE USING RPM
+        .adu[4] = (uint8_t)(rpm_value >> 8), // High byte
+        .adu[5] = (uint8_t)(rpm_value & 0xFF), // Low byte
         .tx_length = 8,
         .rx_length = 8
     };
