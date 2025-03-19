@@ -52,8 +52,8 @@ typedef enum {
     LaserMains_Off  = 513,
     LaserGuide_On   = 514,
     LaserGuide_Off  = 515,
-    LaserEnable_On  = 516,
-    LaserEnable_Off = 517,
+    LaserShutter_On  = 516,
+    LaserShutter_Off = 517,
 
     Argon_On    = 520,
     Argon_Off   = 521,
@@ -89,7 +89,7 @@ typedef union {
         uint8_t ready          :1, //!< 
                 mains          :1, //!< 
                 guide          :1, //!< 
-                enable         :1, //!< 
+                shutter         :1, //!< 
                 unused         :4;
     };
 } IPG_state_t;
