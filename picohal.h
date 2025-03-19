@@ -49,7 +49,8 @@ typedef enum {
     LaserReady_On   = 510,
     LaserReady_Off  = 511,
     LaserMains_On   = 512,
-    LaserMains_Off  = 513,
+    LaserError_Reset  = 513,
+    //LaserMains_Off  = 513,
     LaserGuide_On   = 514,
     LaserGuide_Off  = 515,
     LaserShutter_On  = 516,
@@ -60,7 +61,12 @@ typedef enum {
     Powder1_On  = 522,
     Powder1_Off = 523,
     Powder2_On  = 524,
-    Powder2_Off = 525
+    Powder2_Off = 525,
+    PowderSwitch_On  = 526,
+    PowderSwitch_Off = 527,
+
+    Powder1_FlowRate = 501,
+    Powder2_FlowRate = 502
 } picohal_mcode_t;
 
 typedef enum {
@@ -89,8 +95,9 @@ typedef union {
         uint8_t ready          :1, //!< 
                 mains          :1, //!< 
                 guide          :1, //!< 
-                shutter         :1, //!< 
-                unused         :4;
+                shutter        :1, //!<
+                error_reset    :1, //!<
+                unused         :3;
     };
 } IPG_state_t;
 
@@ -102,7 +109,8 @@ typedef union {
         uint8_t argon          :1, //!< 
                 powder1        :1, //!< 
                 powder2        :1, //!< 
-                unused         :5;
+                powder_switch  :1, //!< 
+                unused         :4;
     };
 } BLC_state_t;
 

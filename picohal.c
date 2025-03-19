@@ -58,6 +58,7 @@ static const modbus_callbacks_t callbacks = {
 static coolant_state_t current_coolant_state;
 static IPG_state_t current_IPG_state;
 static BLC_state_t current_BLC_state;
+static uint16_t current_BLC_flowrate = (10 | (10 << 8)); //Initialize both powder flow rates to 1.0RPM
 
 static sys_state_t current_state; 
 
@@ -261,6 +262,24 @@ static void picohal_set_BLC_output (BLC_state_t BLC_state)
     enqueue_message(cmd);
 }
 
+static void picohal_set_BLC_flowrate (uint16_t BLC_flowrate)
+{       
+    //set BLC flowrate in register 0x121
+    modbus_message_t cmd = {
+        .context = NULL,
+        .crc_check = false,
+        .adu[0] = PICOHAL_ADDRESS,
+        .adu[1] = ModBus_WriteRegister,
+        .adu[2] = 0x01,
+        .adu[3] = 0x21,
+        .adu[4] = BLC_flowrate >> 8,
+        .adu[5] = BLC_flowrate & 0xFF,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+    enqueue_message(cmd);
+}
+
 static void picohal_create_event (picohal_events event){
 
     modbus_message_t cmd = {
@@ -392,10 +411,14 @@ static void picohal_poll_delay (sys_state_t grbl_state)
 static user_mcode_type_t check (user_mcode_t mcode)
 {
     return ((picohal_mcode_t)mcode == LaserReady_On || (picohal_mcode_t)mcode == LaserReady_Off ||
-            (picohal_mcode_t)mcode == LaserMains_On || (picohal_mcode_t)mcode == LaserMains_Off ||
+            (picohal_mcode_t)mcode == LaserMains_On || (picohal_mcode_t)mcode == LaserError_Reset ||
             (picohal_mcode_t)mcode == LaserGuide_On || (picohal_mcode_t)mcode == LaserGuide_Off ||
+            (picohal_mcode_t)mcode == LaserShutter_On || (picohal_mcode_t)mcode == LaserShutter_Off ||
             (picohal_mcode_t)mcode == Argon_On || (picohal_mcode_t)mcode == Argon_Off ||
-            (picohal_mcode_t)mcode == Powder1_On || (picohal_mcode_t)mcode == Powder1_Off
+            (picohal_mcode_t)mcode == Powder1_On || (picohal_mcode_t)mcode == Powder1_Off ||
+            (picohal_mcode_t)mcode == Powder2_On || (picohal_mcode_t)mcode == Powder2_Off ||
+            (picohal_mcode_t)mcode == PowderSwitch_On || (picohal_mcode_t)mcode == PowderSwitch_Off ||
+            (picohal_mcode_t)mcode == Powder1_FlowRate || (picohal_mcode_t)mcode == Powder2_FlowRate
             )
                      ? UserMCode_Normal //  Handled by us. Set to UserMCode_NoValueWords if there are any parameter words (letters) without an accompanying value.
                      : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Unsupported);	// If another handler present then call it or return ignore.
@@ -414,7 +437,7 @@ static status_code_t validate (parser_block_t *gc_block)
             break;
         case LaserMains_On:
             break;
-        case LaserMains_Off:
+        case LaserError_Reset:
             break;
         case LaserGuide_On:
             break;
@@ -428,7 +451,28 @@ static status_code_t validate (parser_block_t *gc_block)
             break;
         case Powder1_Off:
             break;
+        case Powder2_On:
+            break;
+        case Powder2_Off:
+            break;
+        case PowderSwitch_On:
+            break;
+        case PowderSwitch_Off:
+            break;
+        case Powder1_FlowRate:
+        case Powder2_FlowRate:
+            if(gc_block->words.q && isnan(gc_block->values.q))          // Check if Q parameter value is supplied.
+            state = Status_BadNumberFormat;                             // Return error if not.        
 
+            if(state != Status_BadNumberFormat && gc_block->words.q) {          // Are required parameters provided?
+                if(gc_block->values.q >= 10.0f && gc_block->values.q <= 150.0f) // Yes, is Q parameter value in range (0-150)?
+                    state = Status_OK;                                          // Yes - return ok status.
+                else
+                    state = Status_GcodeValueOutOfRange;                    // No - return error status.
+                gc_block->words.q = Off;                                    // Claim parameters.
+                gc_block->user_mcode_sync = true;                           // Optional: execute command synchronized
+            }
+            break;
         default:
             state = Status_Unhandled;
             break;
@@ -453,20 +497,34 @@ static void execute (sys_state_t state, parser_block_t *gc_block)
             current_IPG_state.ready = 0;
             picohal_set_IPG_output(current_IPG_state);
             break;
-        case LaserMains_On:
+        case LaserMains_On: // Mains is momentary so no need for off command
             current_IPG_state.mains = 1;
             picohal_set_IPG_output(current_IPG_state);
-            break;
-        case LaserMains_Off:
             current_IPG_state.mains = 0;
-            picohal_set_IPG_output(current_IPG_state);
             break;
+        case LaserError_Reset: // Reset is momentary so no need for off command
+            current_IPG_state.error_reset = 1;
+            picohal_set_IPG_output(current_IPG_state);
+            current_IPG_state.error_reset = 0;
+            break;
+        // case LaserMains_Off:
+        //     current_IPG_state.mains = 0;
+        //     picohal_set_IPG_output(current_IPG_state);
+        //     break;
         case LaserGuide_On:
             current_IPG_state.guide = 1;
             picohal_set_IPG_output(current_IPG_state);
             break;
         case LaserGuide_Off:
             current_IPG_state.guide = 0;
+            picohal_set_IPG_output(current_IPG_state);
+            break;
+        case LaserShutter_On:
+            current_IPG_state.shutter = 1;
+            picohal_set_IPG_output(current_IPG_state);
+            break;
+        case LaserShutter_Off:
+            current_IPG_state.shutter = 0;
             picohal_set_IPG_output(current_IPG_state);
             break;
         case Argon_On:
@@ -485,7 +543,30 @@ static void execute (sys_state_t state, parser_block_t *gc_block)
             current_BLC_state.powder1 = 0;
             picohal_set_BLC_output(current_BLC_state);
             break;
-
+        case Powder2_On:
+            current_BLC_state.powder2 = 1;
+            picohal_set_BLC_output(current_BLC_state);
+            break;
+        case Powder2_Off:
+            current_BLC_state.powder2 = 0;
+            picohal_set_BLC_output(current_BLC_state);
+            break;
+        case PowderSwitch_On:
+            current_BLC_state.powder_switch = 1;
+            picohal_set_BLC_output(current_BLC_state);
+            break;
+        case PowderSwitch_Off:
+            current_BLC_state.powder_switch = 0;
+            picohal_set_BLC_output(current_BLC_state);
+            break;
+        case Powder1_FlowRate:
+            current_BLC_flowrate = (current_BLC_flowrate & 0XFF00) | ((uint16_t)gc_block->values.q & 0X00FF);
+            picohal_set_BLC_flowrate(current_BLC_flowrate);
+            break;
+        case Powder2_FlowRate:
+            current_BLC_flowrate = (current_BLC_flowrate & 0X00FF) | ((uint16_t)gc_block->values.q << 8);
+            picohal_set_BLC_flowrate(current_BLC_flowrate);
+            break;
         default:
             handled = false;
             break;
@@ -565,6 +646,9 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
 static void driverReset (void)
 {
     picohal_set_state();
+    picohal_set_IPG_output((IPG_state_t){0});
+    picohal_set_BLC_flowrate(current_BLC_flowrate);
+    picohal_set_BLC_output((BLC_state_t){0});
     driver_reset();
 }
 
