@@ -2,18 +2,20 @@
 
   picohal.c
 
-  Part of grblHAL
-  grblHAL is
-  Copyright (c) 2022-2023 Terje Io
+  Part of grblHAL picohal plugin
 
-  picoHAL design and plugin code are copyright (c) 2023 Expatria Technologies Inc.
+  Copyright (c) 2022-2025 Terje Io
+  Copyright (c) 2023 Andrew Marles
+  Copyright (c) 2024-2025 Mitchell Grams
 
-  Grbl is free software: you can redistribute it and/or modify
+  picoHAL design is copyright (c) 2023 Expatria Technologies Inc.
+
+  GrblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Grbl is distributed in the hope that it will be useful,
+  GrblHAL is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
