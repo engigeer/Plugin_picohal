@@ -123,7 +123,7 @@ static void picohal_send (){
     //    return;
 
     if(peek_message()){
-        modbus_send(current_msg_ptr, &callbacks, false);
+        modbus_send(current_msg_ptr, &callbacks, true);
     }
 }
 
@@ -315,7 +315,7 @@ static void spindleSetRPM (float rpm, bool block)
         .rx_length = 8
     };
 
-    modbus_send(&mode_cmd, &callbacks, false);
+    enqueue_message(mode_cmd);
 }
 
 static void spindleSetSpeed (spindle_ptrs_t *spindle, float rpm)
@@ -346,8 +346,8 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
     spindle_state.on = state.on;
     spindle_state.ccw = state.ccw;
 
-    if(modbus_send(&mode_cmd, &callbacks, false))
-        spindleSetRPM(rpm, true);
+    if(enqueue_message(mode_cmd))
+        spindleSetRPM(rpm, false);
 }
 
 // Returns spindle state in a spindle_state_t variable
@@ -645,7 +645,7 @@ static void onSpindleSelected (spindle_ptrs_t *spindle)
 }
 
 // DRIVER RESET
-static void driverReset (void)
+static void onDriverReset (void)
 {
     picohal_set_state();
     picohal_set_IPG_output((IPG_state_t){0});
@@ -729,6 +729,6 @@ void picohal_init (void)
     grbl.on_program_completed = onProgramCompleted;     // Checkered Flag for successful end of program lives here
 
     driver_reset = hal.driver_reset;                    // Subscribe to driver reset event
-    hal.driver_reset = driverReset;
+    hal.driver_reset = onDriverReset;
 
 }
