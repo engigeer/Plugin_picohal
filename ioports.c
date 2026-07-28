@@ -81,8 +81,8 @@ modbus_message_t keepalive_msg = {
 static uint16_t picohal_d_out[1]; // 16 BIT NUMBER IS GOOD FOR UP TO 16 DIGITAL OUTPUTS
 static uint16_t picohal_a_out[2]; // NEEDS TO BE EQUAL TO NUMBER OF ANALOG OUTPUTS? (ALSO NEED TO TEST. . .)
 static pin_function_t aux_dout_base = Output_Aux0, aux_aout_base = Output_Analog_Aux0;
-static io_ports_data_t analog;
-static io_ports_data_t digital;
+static io_ports_data_t analog = { .external = true };
+static io_ports_data_t digital = { .external = true };
 
 static picohal_aux_t aux_dout[PICOHAL_PORTS] = {};
 static picohal_aux_t aux_aout[2] = {};
@@ -157,33 +157,6 @@ bool picohal_send_message_now (modbus_message_t *data, bool block){
     return okay;
 }
 
-static bool analog_out (uint8_t port, float value)
-{
-    if(port < analog.out.n_ports) {
-
-        uint16_t *val = (uint16_t *)aux_aout[port].aux.port; //get current value
-
-        *val = (uint16_t)value;
-
-        modbus_message_t data = {
-            .context = NULL,
-            .crc_check = false,
-            .adu[0] = PICOHAL_ADDRESS,
-            .adu[1] = ModBus_WriteRegister,
-            .adu[2] = (uint8_t)(aux_aout[port].addr >> 8),
-            .adu[3] = (uint8_t)(aux_aout[port].addr & 0xFF),
-            .adu[4] = (uint8_t)(*val >> 8),
-            .adu[5] = (uint8_t)*val,
-            .tx_length = 8,
-            .rx_length = 8
-        };
-
-        picohal_send_message_now(&data, false);
-    }
-
-    return true;
-}
-
 static void digital_out_ll (xbar_t *output, float value)
 {
     bool on = value !=0.0f;
@@ -237,6 +210,36 @@ static bool digital_out_cfg (xbar_t *output, gpio_out_config_t *config, bool per
     return output->id < digital.out.n_ports;
 }
 
+static void analog_out_ll (xbar_t *output, float value)
+{
+    uint16_t *val = (uint16_t *)aux_aout[output->id].aux.port;; //get current value
+
+    *val = (uint16_t)value;
+
+    modbus_message_t data = {
+        .context = NULL,
+        .crc_check = false,
+        .adu[0] = PICOHAL_ADDRESS,
+        .adu[1] = ModBus_WriteRegister,
+        .adu[2] = (uint8_t)(aux_aout[output->id].addr >> 8),
+        .adu[3] = (uint8_t)(aux_aout[output->id].addr & 0xFF),
+        .adu[4] = (uint8_t)(*val >> 8),
+        .adu[5] = (uint8_t)*val,
+        .tx_length = 8,
+        .rx_length = 8
+    };
+
+    picohal_send_message_now(&data, false);
+}
+
+static bool analog_out (uint8_t port, float value)
+{
+    if(port < analog.out.n_ports)
+        analog_out_ll(&aux_aout[port].aux, value);
+
+    return port < analog.out.n_ports;
+}
+
 static float analog_out_state (xbar_t *output)
 {
     float value = -1.0f;
@@ -255,6 +258,14 @@ static float digital_out_state (xbar_t *output)
         value = (float)(!!(*(uint16_t *)output->port & (1 << output->id)));
 
     return value;
+}
+
+static bool analog_set_function (xbar_t *port, pin_function_t function)
+{
+    if(port->mode.output)
+        aux_aout[port->id].aux.function = function;
+
+    return true;
 }
 
 static bool set_function (xbar_t *output, pin_function_t function)
@@ -277,8 +288,12 @@ static xbar_t *a_get_pin_info (io_port_direction_t dir, uint8_t port)
 
     if(dir == Port_Output && port < analog.out.n_ports) {
         memcpy(&pin, &aux_aout[port].aux, sizeof(xbar_t));
+        pin.pin += analog.out.pin_base;
         pin.get_value = analog_out_state;
+        pin.set_value = analog_out_ll;
+        pin.set_function = analog_set_function;
         info = &pin;
+        //TODO: test set_value,set_function and config functions for analog outputs
     }
 
     return info;
@@ -297,6 +312,7 @@ static xbar_t *d_get_pin_info (io_port_direction_t dir, uint8_t port)
 
     if(dir == Port_Output && port < digital.out.n_ports) {
         memcpy(&pin, &aux_dout[port].aux, sizeof(xbar_t));
+        pin.pin += digital.out.pin_base;
         pin.get_value = digital_out_state;
         pin.set_function = set_function;
         pin.config = digital_out_cfg;
@@ -338,7 +354,7 @@ static void onEnumeratePins (bool low_level, pin_info_ptr pin_info, void *data)
         memcpy(&pin, &aux_dout[idx].aux, sizeof(xbar_t));
 
         if(!low_level)
-            pin.port = "PicoHAL";
+            pin.port = "PicoHAL:";
 
         pin_info(&pin, data);
     };
@@ -348,7 +364,7 @@ static void onEnumeratePins (bool low_level, pin_info_ptr pin_info, void *data)
         memcpy(&pin, &aux_aout[idx].aux, sizeof(xbar_t));
 
         if(!low_level)
-            pin.port = "PicoHAL2";
+            pin.port = "PicoHAL2:";
 
         pin_info(&pin, data);
     };
@@ -367,7 +383,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("PicoHAL IOExpansion", picohal_is_online ? "0.03" : "0.03 : (not connected)");
+        report_plugin("PicoHAL IOExpansion", picohal_is_online ? "0.04" : "0.04 : (not connected)");
 }
 
 static void OnReset (void)
@@ -405,81 +421,85 @@ static void complete_setup (void *data)
 
 void picohal_io_init (void) {
 
-    uint_fast8_t idx;
+    static bool ok = false;
 
-    hal.enumerate_pins(false, get_aux_max, NULL);
+    if(!ok) {
 
-    digital.out.n_ports = sizeof(aux_dout) / sizeof(picohal_aux_t);
+        uint_fast8_t idx;
 
-    for(idx = 0; idx < digital.out.n_ports; idx ++) {
-        aux_dout[idx].addr = PICOHAL_ADDR_DOUT;
-        aux_dout[idx].aux.id = idx;
-        aux_dout[idx].aux.pin = idx+30;
-        aux_dout[idx].aux.port = &picohal_d_out;
-        aux_dout[idx].aux.function = aux_dout_base + idx;
-        aux_dout[idx].aux.group = PinGroup_AuxOutput;
-        aux_dout[idx].aux.cap.output = On;
-        aux_dout[idx].aux.cap.invert = On;
-        aux_dout[idx].aux.cap.external = On;
-        aux_dout[idx].aux.cap.async = Off; //TODO: make configurable via xbar_config call
-        aux_dout[idx].aux.cap.claimable = On;
-        aux_dout[idx].aux.mode.inverted = Off;
-        aux_dout[idx].aux.mode.output = On;
+        hal.enumerate_pins(false, get_aux_max, NULL);
+
+        digital.out.n_ports = sizeof(aux_dout) / sizeof(picohal_aux_t);
+
+        for(idx = 0; idx < digital.out.n_ports; idx ++) {
+            aux_dout[idx].addr = PICOHAL_ADDR_DOUT;
+            aux_dout[idx].aux.id = idx;
+            aux_dout[idx].aux.pin = idx+30;
+            aux_dout[idx].aux.port = &picohal_d_out;
+            aux_dout[idx].aux.function = aux_dout_base + idx;
+            aux_dout[idx].aux.group = PinGroup_AuxOutput;
+            aux_dout[idx].aux.cap.output = On;
+            aux_dout[idx].aux.cap.invert = On;
+            aux_dout[idx].aux.cap.external = On;
+            aux_dout[idx].aux.cap.async = Off; //TODO: make configurable via xbar_config call
+            aux_dout[idx].aux.cap.claimable = On;
+            aux_dout[idx].aux.mode.inverted = Off;
+            aux_dout[idx].aux.mode.output = On;
+        }
+
+        io_digital_t dports = {
+            .ports = &digital,
+            .digital_out = digital_out,
+            .get_pin_info = d_get_pin_info,
+            .set_pin_description = d_set_pin_description,
+        };
+
+        ioports_add_digital(&dports);
+
+        analog.out.n_ports = sizeof(aux_aout) / sizeof(picohal_aux_t);
+
+        for(idx = 0; idx < analog.out.n_ports; idx ++) {
+            aux_aout[idx].addr = PICOHAL_ADDR_AOUT + idx;
+            aux_aout[idx].aux.id = idx; 
+            aux_aout[idx].aux.pin = idx;
+            aux_aout[idx].aux.port = &picohal_a_out[idx];
+            aux_aout[idx].aux.function = aux_aout_base + idx;
+            aux_aout[idx].aux.group = PinGroup_AuxOutputAnalog;
+            aux_aout[idx].aux.cap.output = On;
+            aux_aout[idx].aux.cap.analog = On;
+            aux_aout[idx].aux.cap.resolution = Resolution_16bit;
+            aux_aout[idx].aux.cap.external = On;
+            aux_aout[idx].aux.cap.async = On;
+            aux_aout[idx].aux.cap.claimable = On;
+            aux_aout[idx].aux.mode.output = On;
+            aux_aout[idx].aux.mode.analog = On;
+        }
+
+        io_analog_t aports = {
+            .ports = &analog,
+            .analog_out = analog_out,
+            .get_pin_info = a_get_pin_info,
+            .set_pin_description = a_set_pin_description,
+        };
+
+        ioports_add_analog(&aports);
+
+        // delay final setup until startup is complete
+        //task_run_on_startup(complete_setup, NULL);
+        
+        on_enumerate_pins = hal.enumerate_pins;
+        hal.enumerate_pins = onEnumeratePins;
+
+        on_report_options = grbl.on_report_options;
+        grbl.on_report_options = onReportOptions;
+
+        driver_reset = hal.driver_reset;
+        hal.driver_reset = OnReset;
+
+        task_run_on_startup(picohal_send_keepalive, NULL);
+
+        picospindle_init();
     }
-
-    io_digital_t dports = {
-        .ports = &digital,
-        .digital_out = digital_out,
-        .get_pin_info = d_get_pin_info,
-        .set_pin_description = d_set_pin_description,
-    };
-
-    ioports_add_digital(&dports);
-
-    analog.out.n_ports = sizeof(aux_aout) / sizeof(picohal_aux_t);
-
-    for(idx = 0; idx < analog.out.n_ports; idx ++) {
-        aux_aout[idx].addr = PICOHAL_ADDR_AOUT + idx;
-        aux_aout[idx].aux.id = idx; 
-        aux_aout[idx].aux.pin = idx;
-        aux_aout[idx].aux.port = &picohal_a_out[idx];
-        aux_aout[idx].aux.function = aux_aout_base + idx;
-        aux_aout[idx].aux.group = PinGroup_AuxOutputAnalog;
-        aux_aout[idx].aux.cap.output = On;
-        aux_aout[idx].aux.cap.analog = On;
-        aux_aout[idx].aux.cap.resolution = Resolution_16bit;
-        aux_aout[idx].aux.cap.external = On;
-        aux_aout[idx].aux.cap.async = On;
-        aux_aout[idx].aux.cap.claimable = On;
-        aux_aout[idx].aux.mode.output = On;
-        aux_aout[idx].aux.mode.analog = On;
-    }
-
-    io_analog_t aports = {
-        .ports = &analog,
-        .analog_out = analog_out,
-        .get_pin_info = a_get_pin_info,
-        .set_pin_description = a_set_pin_description,
-    };
-
-    ioports_add_analog(&aports);
-
-    // delay final setup until startup is complete
-    //task_run_on_startup(complete_setup, NULL);
-    
-    on_enumerate_pins = hal.enumerate_pins;
-    hal.enumerate_pins = onEnumeratePins;
-
-    on_report_options = grbl.on_report_options;
-    grbl.on_report_options = onReportOptions;
-
-    driver_reset = hal.driver_reset;
-    hal.driver_reset = OnReset;
-
-    task_run_on_startup(picohal_send_keepalive, NULL);
-
-    picospindle_init();
-
 }
 
 #endif // PICOHAL_IO_ENABLE
