@@ -50,7 +50,6 @@ static bool toggle_state = 1;
 #define PICOHAL_ADDR_SP_RPM      0x0201
 #endif
 
-
 static void spindleSetRPM (float rpm, bool block)
 {
  // ensure toggle is still respected if new rpm is commanded
@@ -85,6 +84,22 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
 {
     UNUSED(spindle);
 
+    //Reset toggle when spindle is first turned on or turned off
+    if(!spindle_state.on || !state.on)
+        toggle_state = 1;
+
+    // If spindle is being turned on, pass the desired speed to picoHAL first
+    if (!spindle_state.on && state.on) {
+        // Use the actual RPM to set the speed (ignore laser motion override), laser modulation is always off on first enable so this is SAFE
+        float setpt_rpm = gc_state.spindle->rpm; // TODO: check to make sure that gc_state values apply to current spindle?
+
+        if(spindle_hal->param->override_pct != 100 && !spindle_hal->param->option.override_disable)
+            setpt_rpm *= 0.01f * (float)spindle_hal->param->override_pct; // Scale RPM by override value.
+
+        setpt_rpm = setpt_rpm <= 0.0f ? 0.0f : constrain(setpt_rpm, spindle_hal->rpm_min, spindle_hal->rpm_max); //Limit rpm to min/max values
+        spindleSetSpeed(spindle, setpt_rpm);
+    }
+
     modbus_message_t data = {
         .context = NULL,
         .crc_check = false,
@@ -98,9 +113,6 @@ static void spindleSetState (spindle_ptrs_t *spindle, spindle_state_t state, flo
         .rx_length = 8
     };
 
-    if(!spindle_state.on || !state.on) {
-        toggle_state = 1;
-    }
     spindle_state.on = state.on;
     spindle_state.ccw = state.ccw;
 
